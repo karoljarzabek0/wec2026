@@ -6,7 +6,7 @@
 
   ---
 
-  1. Project Overview & Initial Ideas
+##  1. Project Overview & Initial Ideas
   The team's approach was characterized by a heavy emphasis on spatial feature engineering and a dual-modeling strategy combining econometric interpretability with machine learning
   predictive power.
 
@@ -18,7 +18,7 @@
 
   ---
 
-  2. Dataset Exploration & Management
+## 2. Dataset Exploration & Management
   The team managed a complex "star-schema" of data centered around traffic stations.
 
   Spatial Aggregation (The "Secret Sauce"):
@@ -38,7 +38,7 @@
 
   ---
 
-  3. Modeling Approach
+##  3. Modeling Approach
   The team utilized three distinct classes of models:
 
   A. Econometric Models (R - mgcv/stats)
@@ -61,7 +61,7 @@
 
   ---
 
-  4. Problem Solving & Model Diagnostics
+##  4. Problem Solving & Model Diagnostics
   The team did not just "fit and predict"; they used a rigorous feedback loop:
    1. Residual Analysis: They took residuals from their GAM models and plotted them against time and space to see where the model was "blind."
    2. Spatial Correlation: Used corrplot in R to check if residuals were spatially correlated, which helped them refine the radii for their spatial joins.
@@ -69,7 +69,7 @@
 
   ---
 
-  5. Final Presentation & Results
+##  5. Final Presentation & Results
   The team's final output focused on the q95 (95th percentile) traffic prediction, which is crucial for infrastructure stress testing. They presented their results with:
    * Clear diagnostic plots (Residuals, QQ-plots).
    * Station-level performance reports.
@@ -77,7 +77,7 @@
 
   ---
 
-  6. Gemini's Technical Commentary (Disclaimer: AI Opinion)
+##  6. Gemini's Technical Commentary (Disclaimer: AI Opinion)
    * Spatial Engineering Excellence: In my opinion, the team won because of their data join strategy. Using H3 to create multi-radius features (0.5km to 3km) allowed the model to
      understand both the immediate environment (e.g., a traffic light right next to the station) and the macro environment (e.g., being in a high-density residential zone).
    * Tooling Synergies: The choice of DuckDB + Polars is a "modern stack" move that likely gave them a massive speed advantage in feature engineering compared to teams using standard
