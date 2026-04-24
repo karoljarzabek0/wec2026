@@ -10,4 +10,6 @@ Repository for the team $R^2=67$
 - [GitHub of WEC team (with datasets from previous editions)](https://github.com/WarsawEconometricChallenge)
 
 ## Python's Scikit-learn cheatsheet for model selection
-![cheatsheet_should_display_here][sckitlearn_cheatsheet.png]
+![cheatsheet_should_display_here][sckitlearn_cheatsheet]
+
+[sckitlearn_cheatsheet]: https://github.com/karoljarzabek0/wec2026/raw/master/sckitlearn_cheatsheet.png "Cheatsheet"
