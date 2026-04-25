@@ -31,8 +31,16 @@ data.verticality = df.verticality
 data.danger_index = df.danger_index
 data.position = df.position
 data.is_home = Float64.(df.is_home)
+data.checkpoint_min = Float64.(df.checkpoint_min)
+data.minute_in = Float64.(df.minute_in)
+data.subbed = df.subbed
+data.jersey_number = df.jersey_number
 
 # 3. ADVANCED DIAGNOSTICS & ROBUST FORMATTING
+# Create 'time_on_pitch' (Fatigue proxy) and ensure 'subbed' is numeric
+data.time_on_pitch = data.checkpoint_min .- data.minute_in
+data.is_sub = [v == true ? 1.0 : 0.0 for v in data.subbed]
+
 function test_normality(residuals)
     # Jarque-Bera Test (Manual)
     n = length(residuals)
@@ -76,25 +84,55 @@ function run_robust_report(df_in, formula, name, is_iv=false)
     all_coefs = []
     all_aucs = []
     f_stat = 0.0
+    sargan_p = 1.0
     
-    # Classification & Diagnostics on full data
+    # 3.1 INSTRUMENT SELECTION (Important Only)
+    # Instruments: is_sub (freshness), time_on_pitch (fatigue), jersey_raw (role)
+    df_in.time_on_pitch = Float64.(df_in.checkpoint_min .- df_in.minute_in)
+    df_in.is_sub = [v == true ? 1.0 : 0.0 for v in df_in.subbed]
+    df_in.jersey_raw = Float64.(df_in.jersey_number)
+    
     if is_iv
-        # First Stage: PC1 ~ Instruments + Exogenous
-        m_s1_full = lm(@formula(PC1 ~ verticality + danger_index + position + is_home), df_in)
+        println("\n" * "="^60)
+        println("FIRST-STAGE REGRESSION (OLS): MODELING EXOGENOUS EFFORT")
+        println("="^60)
+        
+        # First Stage
+        m_s1_full = lm(@formula(PC1 ~ verticality + danger_index + position + is_sub + time_on_pitch + jersey_raw), df_in)
+        
+        # Format and Print First Stage Table
+        ct1 = coeftable(m_s1_full)
+        fs_table = DataFrame(Variable=ct1.rownms, Coef=round.(ct1.cols[1], digits=4), p_val=round.(ct1.cols[4], digits=4))
+        fs_table.Sig = [p < 0.001 ? "***" : (p < 0.05 ? "**" : (p < 0.1 ? "*" : "")) for p in fs_table.p_val]
+        println(fs_table)
+        
         df_in.v_hat = residuals(m_s1_full)
         
-        # Calculate F-statistic for the instrument (is_home)
+        # Calculate F-statistic for the EXCLUDED instruments only
         m_s1_restricted = lm(@formula(PC1 ~ verticality + danger_index + position), df_in)
         ssr_r = sum(residuals(m_s1_restricted).^2)
         ssr_u = sum(residuals(m_s1_full).^2)
-        n = nrow(df_in); k = length(coef(m_s1_full)); q = 1 # 1 instrument
+        n = nrow(df_in); k = length(coef(m_s1_full)); q = 3 # 3 instruments: is_sub, time_pitch, jersey
         f_stat = ((ssr_r - ssr_u)/q) / (ssr_u/(n-k))
+        
+        # Sargan-equivalent (Overid Test)
+        pos_c = sum(df_in.target .== 1); total = nrow(df_in)
+        wts = [v == 1.0 ? total/(2*pos_c) : total/(2*(total-pos_c)) for v in df_in.target]
+        m_overid = glm(@formula(target ~ PC1 + PC2 + v_hat + verticality + danger_index + position + is_sub + time_on_pitch + jersey_raw), df_in, Binomial(), LogitLink(), wts=wts)
+        m_base = glm(@formula(target ~ PC1 + PC2 + v_hat + verticality + danger_index + position), df_in, Binomial(), LogitLink(), wts=wts)
+        lr_stat = deviance(m_base) - deviance(m_overid)
+        sargan_p = 1 - cdf(Chisq(3), lr_stat)
+        
+        println("\nInstrument Strength (F-Stat): ", round(f_stat, digits=2))
+        println("Sargan (Overid p-val):        ", round(sargan_p, digits=4))
+        println("-"^60)
     end
     
+    # 3.2 BOOTSTRAPPED INFERENCE
     for i in 1:n_boot
         df_b = df_in[sample(1:nrow(df_in), nrow(df_in), replace=true), :]
         if is_iv
-            m_s1 = lm(@formula(PC1 ~ verticality + danger_index + position + is_home), df_b)
+            m_s1 = lm(@formula(PC1 ~ verticality + danger_index + position + is_sub + time_on_pitch + jersey_raw), df_b)
             df_b.v_hat = residuals(m_s1)
         end
         pos_c = sum(df_b.target .== 1); total = nrow(df_b)
@@ -106,21 +144,20 @@ function run_robust_report(df_in, formula, name, is_iv=false)
         catch; end
     end
     
-    c_mat = hcat(all_coefs...)'
-    means = mean(c_mat, dims=1)
-    stds = std(c_mat, dims=1)
+    means = mean(hcat(all_coefs...)', dims=1)
+    stds = std(hcat(all_coefs...)', dims=1)
     
+    # Fit one representative model on full data for structure
     pos_c_full = sum(df_in.target .== 1); total_full = nrow(df_in)
     wts_full = [v == 1.0 ? total_full/(2*pos_c_full) : total_full/(2*(total_full-pos_c_full)) for v in df_in.target]
     m_full = glm(formula, df_in, Binomial(), LogitLink(), wts=wts_full)
-    
-    probs = predict(m_full)
-    metrics = compute_classification_metrics(df_in.target, probs)
-    mu = probs
-    r_pearson = (df_in.target .- mu) ./ sqrt.(mu .* (1.0 .- mu) .+ 1e-6)
 
     println("\n" * "-"^60)
-    println("ROBUST MODEL: $name")
+    if is_iv
+        println("ROBUST TWO-STAGE (IV) LOGIT RESULTS: $name")
+    else
+        println("ROBUST LOGIT ESTIMATES: $name")
+    end
     println("-"^60)
     
     res = DataFrame(
@@ -133,19 +170,12 @@ function run_robust_report(df_in, formula, name, is_iv=false)
     res.Sig = [p < 0.001 ? "***" : (p < 0.05 ? "**" : (p < 0.1 ? "*" : "")) for p in res.p_val]
     println(res)
     
-    println("\n[DIAGNOSTICS]")
+    println("\n[DIAGNOSTICS SUMMARY]")
     println("Mean Bootstrapped AUC:      ", round(mean(all_aucs), digits=4))
     println("Heteroscedasticity p-val:   ", test_hetero(m_full, df_in.target))
     if is_iv
-        println("First-Stage F-Statistic:    ", round(f_stat, digits=2), " (Weak instrument if < 10)")
-        hausman_idx = findfirst(x->x=="v_hat", res.Variable)
-        println("Hausman Exogeneity p-val:   ", res.p_val[hausman_idx])
+        println("Hausman Exogeneity p-val:   ", res.p_val[findfirst(x->x=="v_hat", res.Variable)])
     end
-    println("Residual Normality p-val:   ", test_normality(r_pearson))
-    
-    println("\n[CLASSIFICATION PERFORMANCE]")
-    println("Recall (Sensitivity):       ", round(metrics.recall * 100, digits=2), "%")
-    println("Precision:                  ", round(metrics.precision * 100, digits=2), "%")
 end
 
 # 4. PRINT OFFICIAL REPORT
