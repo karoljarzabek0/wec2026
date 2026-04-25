@@ -86,8 +86,7 @@ function run_robust_report(df_in, formula, name, is_iv=false)
     f_stat = 0.0
     sargan_p = 1.0
     
-    # 3.1 INSTRUMENT SELECTION (Important Only)
-    # Instruments: is_sub (freshness), time_on_pitch (fatigue), jersey_raw (role)
+    # 3.1 INSTRUMENT SELECTION
     df_in.time_on_pitch = Float64.(df_in.checkpoint_min .- df_in.minute_in)
     df_in.is_sub = [v == true ? 1.0 : 0.0 for v in df_in.subbed]
     df_in.jersey_raw = Float64.(df_in.jersey_number)
@@ -96,39 +95,27 @@ function run_robust_report(df_in, formula, name, is_iv=false)
         println("\n" * "="^60)
         println("FIRST-STAGE REGRESSION (OLS): MODELING EXOGENOUS EFFORT")
         println("="^60)
-        
-        # First Stage
         m_s1_full = lm(@formula(PC1 ~ verticality + danger_index + position + is_sub + time_on_pitch + jersey_raw), df_in)
-        
-        # Format and Print First Stage Table
         ct1 = coeftable(m_s1_full)
         fs_table = DataFrame(Variable=ct1.rownms, Coef=round.(ct1.cols[1], digits=4), p_val=round.(ct1.cols[4], digits=4))
         fs_table.Sig = [p < 0.001 ? "***" : (p < 0.05 ? "**" : (p < 0.1 ? "*" : "")) for p in fs_table.p_val]
         println(fs_table)
-        
         df_in.v_hat = residuals(m_s1_full)
-        
-        # Calculate F-statistic for the EXCLUDED instruments only
         m_s1_restricted = lm(@formula(PC1 ~ verticality + danger_index + position), df_in)
-        ssr_r = sum(residuals(m_s1_restricted).^2)
-        ssr_u = sum(residuals(m_s1_full).^2)
-        n = nrow(df_in); k = length(coef(m_s1_full)); q = 3 # 3 instruments: is_sub, time_pitch, jersey
+        ssr_r = sum(residuals(m_s1_restricted).^2); ssr_u = sum(residuals(m_s1_full).^2)
+        n = nrow(df_in); k = length(coef(m_s1_full)); q = 3 
         f_stat = ((ssr_r - ssr_u)/q) / (ssr_u/(n-k))
-        
-        # Sargan-equivalent (Overid Test)
         pos_c = sum(df_in.target .== 1); total = nrow(df_in)
         wts = [v == 1.0 ? total/(2*pos_c) : total/(2*(total-pos_c)) for v in df_in.target]
         m_overid = glm(@formula(target ~ PC1 + PC2 + v_hat + verticality + danger_index + position + is_sub + time_on_pitch + jersey_raw), df_in, Binomial(), LogitLink(), wts=wts)
         m_base = glm(@formula(target ~ PC1 + PC2 + v_hat + verticality + danger_index + position), df_in, Binomial(), LogitLink(), wts=wts)
         lr_stat = deviance(m_base) - deviance(m_overid)
         sargan_p = 1 - cdf(Chisq(3), lr_stat)
-        
         println("\nInstrument Strength (F-Stat): ", round(f_stat, digits=2))
         println("Sargan (Overid p-val):        ", round(sargan_p, digits=4))
         println("-"^60)
     end
     
-    # 3.2 BOOTSTRAPPED INFERENCE
     for i in 1:n_boot
         df_b = df_in[sample(1:nrow(df_in), nrow(df_in), replace=true), :]
         if is_iv
@@ -144,38 +131,25 @@ function run_robust_report(df_in, formula, name, is_iv=false)
         catch; end
     end
     
-    means = mean(hcat(all_coefs...)', dims=1)
-    stds = std(hcat(all_coefs...)', dims=1)
-    
-    # Fit one representative model on full data for structure
+    means = mean(hcat(all_coefs...)', dims=1); stds = std(hcat(all_coefs...)', dims=1)
     pos_c_full = sum(df_in.target .== 1); total_full = nrow(df_in)
     wts_full = [v == 1.0 ? total_full/(2*pos_c_full) : total_full/(2*(total_full-pos_c_full)) for v in df_in.target]
     m_full = glm(formula, df_in, Binomial(), LogitLink(), wts=wts_full)
+    probs = predict(m_full); metrics = compute_classification_metrics(df_in.target, probs)
 
-    println("\n" * "-"^60)
-    if is_iv
-        println("ROBUST TWO-STAGE (IV) LOGIT RESULTS: $name")
-    else
-        println("ROBUST LOGIT ESTIMATES: $name")
-    end
-    println("-"^60)
-    
-    res = DataFrame(
-        Variable = coefnames(m_full),
-        Estimate = round.(vec(means), digits=4),
-        Robust_StdErr = round.(vec(stds), digits=4),
-        z_stat = round.(vec(means ./ stds), digits=2)
-    )
+    println("\n" * "-"^60); if is_iv println("ROBUST TWO-STAGE (IV) LOGIT RESULTS: $name") else println("ROBUST LOGIT ESTIMATES: $name") end; println("-"^60)
+    res = DataFrame(Variable = coefnames(m_full), Estimate = round.(vec(means), digits=4), Robust_StdErr = round.(vec(stds), digits=4), z_stat = round.(vec(means ./ stds), digits=2))
     res.p_val = [round(2 * (1 - cdf(Normal(), abs(z))), digits=4) for z in res.z_stat]
     res.Sig = [p < 0.001 ? "***" : (p < 0.05 ? "**" : (p < 0.1 ? "*" : "")) for p in res.p_val]
     println(res)
     
     println("\n[DIAGNOSTICS SUMMARY]")
-    println("Mean Bootstrapped AUC:      ", round(mean(all_aucs), digits=4))
+    mean_auc = mean(all_aucs)
+    println("Mean Bootstrapped AUC:      ", round(mean_auc, digits=4))
     println("Heteroscedasticity p-val:   ", test_hetero(m_full, df_in.target))
-    if is_iv
-        println("Hausman Exogeneity p-val:   ", res.p_val[findfirst(x->x=="v_hat", res.Variable)])
-    end
+    if is_iv println("Hausman Exogeneity p-val:   ", res.p_val[findfirst(x->x=="v_hat", res.Variable)]) end
+
+    return (name=name, auc=mean_auc, recall=metrics.recall, precision=metrics.precision)
 end
 
 # 4. PRINT OFFICIAL REPORT
@@ -183,10 +157,23 @@ println("\n" * "="^80)
 println("OFFICIAL ROBUST MODEL REPORT: WARSAW ECONOMETRIC CHALLENGE 2026")
 println("="^80)
 
-# Execute Models
-run_robust_report(data, @formula(target ~ PC1 + PC2 + position), "Model C (Baseline)")
-run_robust_report(data, @formula(target ~ PC1 + PC2 + verticality + danger_index + position), "Model A (Hybrid)")
-run_robust_report(data, @formula(target ~ PC1 + PC2 + v_hat + verticality + danger_index + position), "Final Model (Causal IV)", true)
+summary_results = []
+
+# Execute Models and collect for summary
+push!(summary_results, run_robust_report(data, @formula(target ~ PC1 + PC2 + position), "Model C (Baseline)"))
+push!(summary_results, run_robust_report(data, @formula(target ~ PC1 + PC2 + verticality + danger_index + position), "Model A (Hybrid)"))
+push!(summary_results, run_robust_report(data, @formula(target ~ PC1 + PC2 + v_hat + verticality + danger_index + position), "Final Model (Causal IV)", true))
+
+println("\n" * "="^80)
+println("FINAL CONSOLIDATED PERFORMANCE SUMMARY")
+println("="^80)
+summary_df = DataFrame(
+    Model = [r.name for r in summary_results],
+    Mean_AUC = [round(r.auc, digits=4) for r in summary_results],
+    Recall = [round(r.recall * 100, digits=2) for r in summary_results],
+    Precision = [round(r.precision * 100, digits=2) for r in summary_results]
+)
+println(summary_df)
 
 println("\n" * "="^80)
 println("END OF REPORT (All estimates adjusted for Hetero/Non-Normality via Bootstrapping)")
