@@ -29,4 +29,18 @@
 - high intesity running erformance
 - high dynamics contriubute to general results
 - Chen, Zmijewski, Bradley - Match running performance
+- running in possesion and out possesion is important
+- most important determina - running when team is in possesion has negative context
+
+## The data
+- football tracking data
+- Respo Vision provides tracking data from optical systems
+- when they collect and how is it used:
+- event data vs tracking data
+- event: passed from who to whom
+- tracking: position (more granural)
+
+## Strategy recommendation
+- stay organised
+- 4 parts: data preperation, minimum viable solution, extra solution, paper writing
 
