@@ -43,4 +43,24 @@
 ## Strategy recommendation
 - stay organised
 - 4 parts: data preperation, minimum viable solution, extra solution, paper writing
+- EDA is important
+- clean the data
+- add documentation
+- address all main research questions and then add more
+- iterative development
+- dont add too much information - it lets organiser s now, we dont know what important
+
+## Goal - Will you score a goal?
+- build a predicitve model to support coaches in better assesing a player'slikelihood of scoring a goal over the remaining duration of the game
+- the data: data borken down to 15min intervals, ....
+- research question 1: onfiled bahavior ->? score a goal
+- research question 2: determinants
+- total seven research questions - we dont have to address all of them (we have to)
+- 3: sprints and shots -> goal?
+- 4: passing data, behav under pressure -> goal?
+- 5: short term performance -> goal
+- 6: incerease in short termn performance
+
+## The dataset
+- slides
 
