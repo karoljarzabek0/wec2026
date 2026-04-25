@@ -26,4 +26,7 @@
 
 ## The topic
 - determinants of running performance in football
+- high intesity running erformance
+- high dynamics contriubute to general results
+- Chen, Zmijewski, Bradley - Match running performance
 
