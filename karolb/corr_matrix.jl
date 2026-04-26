@@ -5,14 +5,17 @@
 using CSV, DataFrames, StatsBase, Plots, Plots.Measures
 
 # 1. Configuration & Paths
-# Using relative paths for better portability
-input_file = joinpath("..", "for_participants", "data", "players_quarters_final.csv")
-output_dir = "output"
+# Automatically locate the project root relative to this script
+SCRIPT_DIR = @__DIR__
+PROJECT_ROOT = dirname(SCRIPT_DIR)
+
+input_file = joinpath(PROJECT_ROOT, "for_participants", "data", "players_quarters_final.csv")
+output_dir = joinpath(SCRIPT_DIR, "output")
 mkpath(output_dir)
 
 # 2. Load Data
 if !isfile(input_file)
-    error("Data file not found at: $input_file. Please ensure the script is run from the 'karolb' directory.")
+    error("Data file not found at: $input_file. Please ensure the 'for_participants/data' folder exists in the project root.")
 end
 
 df = CSV.read(input_file, DataFrame)
@@ -58,4 +61,4 @@ output_svg = joinpath(output_dir, "global_correlation_matrix.svg")
 savefig(p_global, output_png)
 savefig(p_global, output_svg)
 
-println("Success! Heatmaps generated in the '$output_dir' directory.")
+println("Success! Heatmaps generated in: $output_dir")

@@ -5,14 +5,17 @@
 using CSV, DataFrames, MultivariateStats, StatsBase, Plots, Plots.Measures, LinearAlgebra
 
 # --- 1. CONFIGURATION ---
-# Using relative paths for better portability
-input_file = joinpath("..", "for_participants", "data", "players_quarters_final.csv")
-export_dir = "output_physical"
+# Automatically locate the project root relative to this script
+SCRIPT_DIR = @__DIR__
+PROJECT_ROOT = dirname(SCRIPT_DIR)
+
+input_file = joinpath(PROJECT_ROOT, "for_participants", "data", "players_quarters_final.csv")
+export_dir = joinpath(SCRIPT_DIR, "output_physical")
 mkpath(export_dir)
 
 # Load data
 if !isfile(input_file)
-    error("Data file not found at: $input_file. Please ensure the script is run from the 'karolb' directory.")
+    error("Data file not found at: $input_file. Please ensure the 'for_participants/data' folder exists in the project root.")
 end
 df = CSV.read(input_file, DataFrame)
 

@@ -6,8 +6,9 @@ using Pkg
 
 # 0. ROBUST ENVIRONMENT AND DEPENDENCY CHECK
 # Use the directory of the script to find the project root
-const SCRIPT_DIR = @__DIR__
-const PROJECT_ROOT = dirname(SCRIPT_DIR)
+# Using variables instead of const to allow re-running in the same REPL session
+SCRIPT_DIR = @__DIR__
+PROJECT_ROOT = dirname(SCRIPT_DIR)
 
 println("Activating environment at: $PROJECT_ROOT")
 Pkg.activate(PROJECT_ROOT)
@@ -18,11 +19,15 @@ installed_packages = keys(Pkg.project().dependencies)
 missing_packages = setdiff(required_packages, installed_packages)
 
 if !isempty(missing_packages)
-    println("The following packages are missing: ", join(missing_packages, ", "))
-    println("Please run: using Pkg; Pkg.add([\"" * join(missing_packages, "\", \"") * "\"])")
-    # We don't automatically add them to respect user control, but we stop if critical
+    println("\n" * "!"^60)
+    println("MISSING PACKAGES DETECTED: ", join(missing_packages, ", "))
+    println("Please run the following command in your Julia REPL to install them:")
+    println("using Pkg; Pkg.add([\"" * join(missing_packages, "\", \"") * "\"])")
+    println("!"^60 * "\n")
+    
+    # Critical check for basic operations
     if "CSV" in missing_packages || "DataFrames" in missing_packages
-        error("Critical packages missing. Please install them to continue.")
+        error("Critical packages (CSV/DataFrames) missing. Please install them as shown above.")
     end
 end
 
@@ -31,15 +36,16 @@ using Plots.Measures
 
 # 1. DATA SETUP & PREPROCESSING
 # Robust paths using absolute locations
-const DATA_DIR = joinpath(PROJECT_ROOT, "for_participants", "data")
+DATA_DIR = joinpath(PROJECT_ROOT, "for_participants", "data")
 
 function load_data()
     files = ["players_quarters_final.csv", "player_appearance_pass.csv", 
              "player_appearance_shot_limited.csv", "player_appearance_behaviour_under_pressure.csv"]
     
     for f in files
-        if !isfile(joinpath(DATA_DIR, f))
-            error("Data file not found: $(joinpath(DATA_DIR, f))\nPlease ensure the 'for_participants/data' folder exists in the project root.")
+        full_path = joinpath(DATA_DIR, f)
+        if !isfile(full_path)
+            error("Data file not found: $full_path\nPlease ensure the 'for_participants/data' folder exists in the project root.")
         end
     end
 
